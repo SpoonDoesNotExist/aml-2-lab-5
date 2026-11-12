@@ -1,0 +1,55 @@
+---
+- name: Base setup
+  hosts: vms
+  become: true
+  tasks:
+    - name: Install base packages
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop: "{{ base_packages }}"
+
+    - name: Deploy /etc/cron.d/ansible_check
+      ansible.builtin.template:
+        src: templates/ansible_check.j2
+        dest: /etc/cron.d/ansible_check
+        mode: "0644"
+      notify: Restart cron
+
+    - name: Install ML packages
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - python3-pip
+        - python3-venv
+
+    - name: Deploy requirements.txt
+      ansible.builtin.template:
+        src: templates/requirements.txt.j2
+        dest: /home/ubuntu/requirements.txt
+        mode: "0644"
+        owner: ubuntu
+
+    - name: Deploy verify.py
+      ansible.builtin.template:
+        src: templates/verify.py.j2
+        dest: /home/ubuntu/verify.py
+        mode: "0755"
+        owner: ubuntu
+
+    - name: Run verify.py
+      ansible.builtin.command: python3 /home/ubuntu/verify.py
+      register: py_out
+      changed_when: false
+
+    - name: Show Python version
+      ansible.builtin.debug:
+        var: py_out.stdout_lines
+
+  handlers:
+    - name: Restart cron
+      ansible.builtin.service:
+        name: cron
+        state: restarted
